@@ -1,147 +1,91 @@
-# AMADEUS (Japanese conversation partner with a 3D avatar)
+# AMADEUS
+
+Voice-driven Japanese conversation partner with a 3D anime avatar in Unity.
 
 [![CI](https://github.com/ManHazz/AMADEUS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ManHazz/AMADEUS/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Unity](https://img.shields.io/badge/Unity-6000.6-black)
-![Coverage](https://img.shields.io/badge/coverage-workflow%20artifact-lightgrey)
 ![Last commit](https://img.shields.io/github/last-commit/ManHazz/AMADEUS)
-
-A voice-driven Japanese conversation partner with a 3D anime avatar, for practising speaking. You hold a key and speak; a local FastAPI agent transcribes your speech, asks a language model for a reply, synthesizes the Japanese voice, and streams text and audio back to a Unity client, where the avatar speaks with lip sync, expressions and subtitles (Japanese with furigana, plus an English translation).
-
-She talks with you in Japanese at roughly JLPT N5 to N4 level, aimed at an English-speaking learner. Short English tips appear as silent on-screen text (they are never spoken), and she gently corrects one mistake at a time without breaking the conversation. She has no character persona and no personal name. This is a conversation partner, not a course: see "Limitations / not included" below.
 
 ## Demo
 
-These are example screenshots from the developer's own setup. They are automated captures from the Unity verification harness (not hand-picked recordings), and they show the developer's own VRM avatar model, which is not included in this repository. Without your own VRM the client shows a placeholder avatar instead.
+Automated captures from the Unity test harness, using the developer's own VRM (not included).
 
 | Neutral | Happy | Angry |
 |---|---|---|
 | ![Neutral expression](docs/images/emotion-neutral.png) | ![Happy expression](docs/images/emotion-happy.png) | ![Angry expression](docs/images/emotion-angry.png) |
-| Default state: mouth closed, no strong emotion. | Chosen from friendly cues such as "thank" or "great" in the reply or its translation. | Chosen from irritation cues; shown here while speaking, so only the eyes and brows carry it. |
+| Default state | Friendly cues | Irritation cues, while speaking |
 
-| Subtitles with furigana and a tip | Full screen: transcript, subtitles, controls |
+| Subtitles | Full client |
 |---|---|
-| ![Subtitle stack with furigana, an English tip and translations](docs/images/subtitles-furigana.png) | ![Full client view](docs/images/demo-full-ui.png) |
-| Japanese lines with readings above the kanji, an English translation per line, a silent amber tip on top, and the playing line highlighted. | The "You (heard)" box top left shows the Whisper transcript. The mic name shown is the generic Windows device label. |
+| ![Subtitles with furigana and a tip](docs/images/subtitles-furigana.png) | ![Full client view](docs/images/demo-full-ui.png) |
+| Furigana, translation, tip | Transcript, subtitles, controls |
 
-How emotions are chosen (see `KeywordEmotionClassifier.cs` and `EmotionDriver.cs`): the client classifies the Japanese text of each segment, the English translation and the reply summary with keyword cues in both languages (happy, sad, angry, surprised, embarrassed) and takes the strongest non-neutral match above a confidence floor. The emotion is held until speech ends plus 2 seconds, then fades to neutral. While she speaks, the strong whole-face expressions are capped so the mouth can follow the voice; the eyes and brows carry the mood. It is keyword matching, not a model of the conversation, so it can be wrong. The screenshots come from the test harness (which sets the expression), not from live conversations.
+Emotions: keyword cues in the Japanese text and English translation pick the strongest non-neutral match. It is keyword matching, so it can be wrong.
 
 ## Features
 
-- Push-to-talk voice conversation in English or Japanese.
-- Local speech recognition (faster-whisper) and local speech synthesis (Kokoro, with a Japanese voice for the Japanese lines).
-- Language model through any OpenAI-compatible chat endpoint (developed against Gemini; a local llama.cpp server also works).
-- Segment protocol: every line of a reply is tagged `[ja]` (spoken Japanese), `[en]` (silent English tip) or `[tr]` (silent English translation). See `agent/PROTOCOL_SEGMENTS.md`.
-- Conversation practice with gentle corrections, one at a time. On request by plain words she can also do conversation-practice exercises: "quiz me" (short questions), "teach me <topic>" (a few example sentences with a check question) and shadowing (repeat a line; she compares your transcript to hers).
-- Unity client: VRM 1.0 avatar, lip sync driven by the audio level, keyword-based emotion, idle motion, subtitles with furigana, debug panel (F2).
-- Optional web search in the agent (can be turned off with `ENABLE_WEB_SEARCH=0`).
+- Push-to-talk voice chat in Japanese or English.
+- Local speech recognition (faster-whisper) and speech synthesis (Kokoro).
+- Any OpenAI-compatible chat endpoint (developed against Gemini; local llama.cpp also works).
+- Reply lines tagged `[ja]` (spoken), `[en]` (silent tip), `[tr]` (silent translation): `agent/PROTOCOL_SEGMENTS.md`.
+- Gentle corrections, one at a time; "quiz me", "teach me <topic>" and shadowing on request.
+- VRM 1.0 avatar with lip sync, keyword emotion, idle motion, furigana subtitles, debug panel (F2).
+- Optional web search (`ENABLE_WEB_SEARCH=0` turns it off).
 
-## Architecture
+## How it works
 
-    Unity client (unity/)                           Local agent (agent/)
-    +--------------------------+   audio (HTTP)   +-------------------------------+
-    | microphone, push-to-talk | ---------------> | FastAPI server (server.py)    |
-    |                          |                  |   faster-whisper (speech to   |
-    | avatar (VRM) + lip sync  | <--------------- |   text)                       |
-    | subtitles + furigana     |  event stream:   |   brain: chat model via an    |
-    | emotion / idle           |  text segments,  |   OpenAI-compatible API       |
-    +--------------------------+  audio chunks    |   Kokoro (text to speech)     |
-                                                  +-------------------------------+
+    Unity client (unity/)  <--- audio (HTTP) / event stream --->  FastAPI agent (agent/)
+    mic, avatar, subtitles                                        Whisper STT, Gemini, Kokoro TTS
 
-The Unity client reads the agent address and access token from `unity/agent.local.json` (a template is provided as `agent.local.json.example`).
+- Client sends your speech; the agent transcribes it, asks the model, synthesizes the voice.
+- Text segments and audio chunks stream back for lip sync and subtitles.
+- Client reads agent URL and token from `unity/agent.local.json`.
 
-## Repository layout
+## Quick start
 
-    agent/    the voice agent (Python): server, pipeline, prompts, tests, end-to-end suite
-    unity/    the Unity 6 project (client, avatar scripts, room scene, EditMode tests, helper scripts)
+Config (both routes): copy `agent/.env.example` to `agent/.env`; set `BRAIN_URL`, `BRAIN_MODEL`, `BRAIN_API_KEY` (your Gemini key) and `VOICE_AGENT_TOKEN`. Never commit `.env`.
 
-## Docker (agent)
+Agent, Docker (details: `agent/DOCKER.md`):
 
-The simplest way to run the agent is Docker: the image bundles Python 3.12, CUDA 12.6, cuDNN 9 and all dependencies, so there is no dependency setup. Copy `agent/.env.example` to `agent/.env`, fill in the brain key and `VOICE_AGENT_TOKEN`, then run `docker compose up --build` inside `agent/` (use `-f docker-compose.cpu.yml` without an NVIDIA GPU). See `agent/DOCKER.md` for prerequisites and troubleshooting. This setup is documented but not yet tested end to end.
+1. `cd agent`
+2. `cp .env.example .env` and edit it
+3. `docker compose up --build` (no NVIDIA GPU: add `-f docker-compose.cpu.yml`)
 
-## Setup: agent
+Agent, local (Windows, Python 3.12):
 
-Requirements: Windows (the launcher is a PowerShell script; the code itself is Python), Python 3.12 (the project was developed with 3.12), and a language-model endpoint or key.
+1. `cd agent; python -m venv .venv; .\.venv\Scripts\Activate.ps1; pip install -r requirements.txt` (read the comments in `requirements.txt` first)
+2. Copy and edit `.env` as above
+3. `powershell -ExecutionPolicy Bypass -File run_local.ps1` (listens on `http://127.0.0.1:5000`)
 
-1. Create a virtual environment and install dependencies:
+Unity:
 
-        cd agent
-        python -m venv .venv
-        .\.venv\Scripts\Activate.ps1
-        pip install -r requirements.txt
+1. Open `unity/` in Unity 6000.6.5f1 (first import fetches UniVRM from GitHub).
+2. Put your VRM 1.0 at `Assets/Characters/amadeus.vrm`, or skip it for a placeholder avatar (`unity/Assets/Characters/README.md`).
+3. Copy `unity/agent.local.json.example` to `unity/agent.local.json`; set the URL and the same token as `VOICE_AGENT_TOKEN`.
+4. Open `Assets/Scenes/Room.unity`, press Play, hold Space and speak.
 
-   Read the comments in `requirements.txt` first: on Windows the Japanese text-processing dependency needs a prebuilt wheel, and CUDA users need extra libraries. The first start downloads the speech models.
-2. Copy `.env.example` to `.env` and edit it. Set `BRAIN_URL`, `BRAIN_MODEL` and, for a hosted provider, `BRAIN_API_KEY`. Set `VOICE_AGENT_TOKEN` to a shared secret (if unset the server prints a random one at startup). Choose `STT_DEVICE` and `TTS_DEVICE` (`cpu` or `cuda`). Never commit `.env`.
-3. Start the server:
+## Tests and CI
 
-        powershell -ExecutionPolicy Bypass -File run_local.ps1
+- Agent: `python -m pytest -q` in `agent/` (no GPU, models or network).
+- Unity EditMode: `powershell -File unity/tools/unity.ps1 test-edit` (Editor closed).
+- End-to-end suite (`agent/e2e/`): needs a GPU and a Gemini key, uses quota, not in CI.
+- CI (`.github/workflows/ci.yml`): ruff errors-only lint and pytest with coverage. The Unity job is off; set the repository variable `UNITY_CI=true` and the GameCI secrets `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` to enable it.
+- A `v*` tag creates a GitHub Release (`cd.yml`).
 
-   It listens on `http://127.0.0.1:5000` by default (`PORT` in `.env`).
+## Limitations
 
-The system prompt is loaded from `SYSTEM_PROMPT_FILE`, else `SYSTEM_PROMPT`, else the bundled `agent/prompts/tutor_neutral.txt`.
+- Not a course: no curriculum, no spoken English explanations.
+- No progress memory between sessions.
+- No pronunciation scoring; she only sees the Whisper transcript.
+- Corrections depend on the model and can be wrong.
+- Free Gemini tiers are rate limited.
+- No avatar model included; the committed scene must be regenerated for yours.
+- Strong expressions are capped while she speaks.
+- Docker setup is untested.
 
-## Setup: Unity client
+## Credits
 
-1. Install Unity 6000.6.5f1 (the version in `unity/ProjectSettings/ProjectVersion.txt`) and open the `unity/` folder as a project. The first import resolves the UniVRM packages from GitHub (see `unity/Packages/manifest.json`).
-2. Add your own VRM 1.0 avatar as `unity/Assets/Characters/amadeus.vrm`. No model is included. Read `unity/Assets/Characters/README.md` for the exact name, how to regenerate the scene for your model, and what happens without it.
-3. Copy `unity/agent.local.json.example` to `unity/agent.local.json` and fill in the agent URL and token (the token is the `VOICE_AGENT_TOKEN` from the agent's `.env`).
-4. Open `Assets/Scenes/Room.unity`, press Play, then hold Space and speak. The F2 key opens a debug panel.
-
-## Hardware notes
-
-- A microphone is required. Use a headset for the cleanest recognition.
-- The speech models run on the CPU or on an NVIDIA GPU (`STT_DEVICE`, `TTS_DEVICE`). CPU works but replies are slower. Measure latency on your own machine (the agent prints per-stage timings with `DEBUG_TIMING=1`) rather than assuming a number.
-- The language model runs wherever `BRAIN_URL` points: a hosted API or a local server.
-
-## Testing
-
-- Agent unit tests (no GPU, models or network needed): from `agent/`, run `python -m pytest -q` in the virtual environment.
-- Unity EditMode tests: `powershell -File unity/tools/unity.ps1 test-edit` (close the Editor first), or use the Test Runner window. The helper script expects Unity at the default Unity Hub path for the version above.
-- End-to-end suite: `agent/e2e/` drives a running server with generated speech and writes a report. It uses the real language model, so it consumes API quota. See `agent/e2e/README.md`.
-
-The demo checklist is in `unity/DEMO_SCRIPT.md`.
-
-## Continuous integration
-
-Workflows live in `.github/workflows/`. They have not been run on GitHub yet, so treat them as unverified until the first run.
-
-- `ci.yml` runs on pushes and pull requests to `main` that touch `agent/**`, `unity/**` or the workflow, and on manual dispatch.
-  - `lint`: `ruff check agent --select E9,F63,F7,F82` (syntax errors and undefined names only, not a style gate).
-  - `agent-tests`: Python 3.12, installs `agent/requirements-dev.txt` only (no GPU, models or `.env`; `faster-whisper` and `kokoro` are stubbed in `agent/tests/conftest.py`), byte-compiles the modules, checks `static/index.html`, then runs `pytest` with coverage. `coverage.xml` is uploaded as the `coverage-xml` workflow artifact; there is no external coverage service.
-  - `unity-tests`: Unity EditMode tests through GameCI. Disabled by default and untested.
-- `cd.yml` runs when a tag matching `v*` is pushed. It creates a GitHub Release with generated notes and attaches a zip of the tracked `agent/` source. A Unity player build is not automated because it needs a Unity licence.
-- `dependabot.yml` proposes weekly updates for `pip` (`/agent`) and GitHub Actions.
-
-Run the same checks locally:
-
-- Agent: from `agent/`, `pip install -r requirements-dev.txt` then `pytest`.
-- End-to-end suite (`agent/e2e/`): needs a GPU and a real Gemini key, uses quota, and is not part of CI.
-- Unity EditMode: `powershell -File unity/tools/unity.ps1 test-edit` with the Editor closed.
-
-### Enabling the Unity job
-
-The `unity-tests` job only runs when the repository variable `UNITY_CI` is `true`. To enable it:
-
-1. Check that GameCI publishes an editor image for Unity 6000.6.5f1 at https://game-ci.com/docs/docker/versions. If it does not, the job will fail; change `unityVersion` or leave it disabled.
-2. Add the repository secrets `UNITY_LICENSE`, `UNITY_EMAIL` and `UNITY_PASSWORD` (see the GameCI activation guide).
-3. Under Settings, Secrets and variables, Actions, Variables, add `UNITY_CI` with the value `true`.
-
-Branch protection and required status checks cannot be set from files; configure them in the repository settings after the first successful run.
-
-## Limitations / not included
-
-- Not a course: no curriculum, no lesson plan, no spoken English explanations. English appears only as silent on-screen tips and subtitles.
-- No progress memory and no spaced repetition. She does not remember you or your mistakes between sessions.
-- No pronunciation scoring from audio. She only receives the Whisper text transcript of what you said, so shadowing exercises check wording, not pronunciation, and speech recognition errors can look like your mistakes.
-- Corrections and quizzes depend on the language model, which can be wrong; treat them as practice, not as authoritative grading.
-- Free-tier language-model endpoints have rate limits, which can cause slow or failed replies.
-- No avatar is bundled. Without a VRM file the Unity client uses a placeholder avatar (see `unity/Assets/Characters/README.md`), and the committed scene needs to be regenerated for your own model.
-- The avatar's strongest expressions are limited while it is talking so the mouth can follow the voice.
-- Emotion is chosen by keyword cues in the text, not by a model of the conversation.
-- The bundled system prompt file keeps its original name (`tutor_neutral.txt`); its content describes an AI Japanese conversation partner.
-
-## Credits and license
-
-The `agent/` directory is based on [ManHazz/Voice-Agent](https://github.com/ManHazz/Voice-Agent) and has been modified for Japanese conversation practice. The Noto Sans JP font in the Unity project is under the SIL Open Font License. UniVRM is a separate package with its own license.
-
-No license has been chosen for this repository yet; add a `LICENSE` file before publishing.
+- `agent/` is based on [ManHazz/Voice-Agent](https://github.com/ManHazz/Voice-Agent).
+- UniVRM, Kokoro, faster-whisper, Noto Sans JP (SIL Open Font License).
+- No `LICENSE` file yet.
