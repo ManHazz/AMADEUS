@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # git archive only ships tracked files, so .env and local files are not included.
+      - name: Zip agent source
+        run: git archive --format=zip --prefix=agent/ -o "amadeus-agent-${GITHUB_REF_NAME}.zip" HEAD:agent
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: amadeus-agent-*.zip

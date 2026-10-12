@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - "unity/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - "unity/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint (ruff, errors only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Only syntax errors and undefined names (E9, F63, F7, F82), so it
+      # passes on the existing code; this is not a style gate.
+      - name: Ruff
+        run: |
+          pip install ruff
+          ruff check agent --select E9,F63,F7,F82
+
+  agent-tests:
+    name: agent tests (py3.12)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agent/requirements-dev.txt
+
+      # Deliberately light: faster-whisper / kokoro / torch are never
+      # installed here; tests/conftest.py stubs them out.
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Syntax-check every module
+        run: python -m py_compile pipeline.py server.py chat_agent.py search_agent.py
+
+      - name: Sanity-check static/index.html
+        run: |
+          python - <<'PY'
+          src = open("static/index.html").read()
+          for o, c in [("{", "}"), ("(", ")"), ("[", "]")]:
+              depth = 0
+              for ch in src:
+                  depth += (ch == o) - (ch == c)
+              assert depth == 0, f"unbalanced {o}{c} in static/index.html"
+          for placeholder in ("__ACCESS_TOKEN__", "__SESSION_ID__"):
+              assert placeholder in src, f"missing {placeholder} placeholder"
+          print("static/index.html OK")
+          PY
+
+      - name: Run unit tests with coverage
+        run: pytest -q --cov=. --cov-report=term --cov-report=xml:coverage.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: agent/coverage.xml
+          if-no-files-found: ignore
+
+  # Disabled by default. Needs Unity licence secrets and a GameCI editor image
+  # for this exact Unity version; see "Continuous integration" in README.md.
+  # Set the repository variable UNITY_CI=true to enable it.
+  unity-tests:
+    name: unity EditMode tests
+    if: ${{ vars.UNITY_CI == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: unity/Library
+          key: Library-${{ hashFiles('unity/Packages/manifest.json', 'unity/ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: Library-
+
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: 6000.6.5f1
+          testMode: editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}

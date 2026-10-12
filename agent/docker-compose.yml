@@ -1,0 +1,29 @@
+# GPU setup (NVIDIA). For CPU only, use docker-compose.cpu.yml instead.
+#   docker compose up --build
+# Put your settings in agent/.env (copy .env.example). Never commit .env.
+services:
+  agent:
+    build: .
+    image: amadeus-agent:latest
+    env_file: .env
+    environment:
+      # Fixed here so a copied .env.example (which says cpu) does not silently disable the GPU.
+      PORT: "5000"
+      STT_DEVICE: cuda
+      TTS_DEVICE: cuda
+      HF_HOME: /models
+    ports:
+      - "${AGENT_PORT:-5000}:5000"
+    volumes:
+      - models:/models
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  models:

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Agent</title>
+<style>
+  body {
+    font-family: -apple-system, sans-serif;
+    background: #111;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  #talkBtn {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    border: none;
+    background: #2a2a2a;
+    color: #fff;
+    font-size: 18px;
+    touch-action: none;
+    user-select: none;
+  }
+  #talkBtn.recording { background: #c0392b; }
+  #talkBtn.thinking { background: #b8860b; }
+  #status { margin-top: 20px; font-size: 14px; color: #999; min-height: 20px; text-align: center; }
+  #searching { margin-top: 10px; font-size: 13px; color: #6aa9ff; min-height: 18px; text-align: center; }
+  #transcript { margin-top: 20px; max-width: 90%; text-align: center; font-size: 14px; color: #ccc; white-space: pre-wrap; }
+  #segments { margin-top: 16px; max-width: 90%; text-align: center; }
+  .seg { margin: 6px 0; }
+  .seg.ja { font-size: 22px; color: #fff; }
+  .seg.en { font-size: 15px; color: #9fd; }
+  .seg.en.silent { font-size: 13px; color: #888; font-style: italic; }
+  .seg .tr { display: block; font-size: 13px; color: #888; }
+  .seg rt { font-size: 11px; color: #aaa; }
+  #resetBtn { margin-top: 30px; background: none; border: 1px solid #444; color: #888; padding: 8px 16px; border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<button id="talkBtn">Hold to talk</button>
+<div id="status">idle</div>
+<div id="searching"></div>
+<div id="transcript"></div>
+<div id="segments"></div>
+<button id="resetBtn">Reset conversation</button>
+
+<script>
+const talkBtn = document.getElementById('talkBtn');
+const statusEl = document.getElementById('status');
+const searchingEl = document.getElementById('searching');
+const transcriptEl = document.getElementById('transcript');
+const segmentsEl = document.getElementById('segments');
+const segEls = {};
+const resetBtn = document.getElementById('resetBtn');
+
+let mediaRecorder;
+let chunks = [];
+let stream;
+let turnNo = 0;              // bumps per reply stream (segment ids restart at 0)
+let busy = false;            // recording, thinking, or playing a live turn
+let searchesActive = 0;      // background web searches in flight
+
+// --- audio playback via Web Audio ---
+// Mobile browsers only start audio if the AudioContext was created/resumed inside
+// a real user gesture, so unlockAudio() runs on the talk-button press. TTS frames
+// arrive while the brain is still generating; decode in arrival order and schedule
+// each buffer back-to-back for gapless sentence-by-sentence speech.
+let audioCtx = null;
+let nextStartTime = 0;
+let decodeChain = Promise.resolve();
+let pendingPlays = 0;
+let streamDone = false;
+let liveSources = [];
+
+function unlockAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  // silent blip to satisfy stricter iOS versions
+  const b = audioCtx.createBuffer(1, 1, 22050);
+  const s = audioCtx.createBufferSource();
+  s.buffer = b; s.connect(audioCtx.destination); s.start(0);
+}
+
+function stopPlayback() {
+  liveSources.forEach(s => { try { s.stop(); } catch (e) {} });
+  liveSources = [];
+  pendingPlays = 0;
+  nextStartTime = 0;
+  decodeChain = Promise.resolve();
+}
+
+function scheduleBuffer(audioBuffer) {
+  const src = audioCtx.createBufferSource();
+  src.buffer = audioBuffer;
+  src.connect(audioCtx.destination);
+  const startAt = Math.max(audioCtx.currentTime + 0.02, nextStartTime);
+  src.start(startAt);
+  nextStartTime = startAt + audioBuffer.duration;
+  liveSources.push(src);
+  pendingPlays++;
+  statusEl.textContent = 'speaking...';
+  src.onended = () => {
+    pendingPlays--;
+    liveSources = liveSources.filter(x => x !== src);
+    if (pendingPlays === 0 && streamDone) statusEl.textContent = 'idle';
+  };
+}
+
+function enqueueAudio(bytes) {
+  if (!audioCtx) return;                 // never unlocked -> can't play
+  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  decodeChain = decodeChain.then(() =>
+    audioCtx.decodeAudioData(ab).then(scheduleBuffer).catch(e => console.warn('decode failed', e))
+  );
+}
+
+// injected by the server at serve time (server.py replaces these placeholders).
+// SESSION_ID is minted fresh per page load so concurrent users/tabs/devices each
+// get an isolated conversation on the server (see pipeline.SessionStore).
+const ACCESS_TOKEN = '__ACCESS_TOKEN__';
+const SESSION_ID = '__SESSION_ID__';
+
+async function initMic() {
+  stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+}
+
+function startRecording() {
+  unlockAudio();          // must happen in the gesture so playback is allowed later
+  stopPlayback();         // cut off any reply still speaking
+  chunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  mediaRecorder.onstop = sendAudio;
+  mediaRecorder.start();
+  talkBtn.classList.add('recording');
+  statusEl.textContent = 'listening...';
+}
+
+// iOS Safari records audio/mp4, Android Chrome records audio/webm; keep the
+// real type + extension so the server hands faster-whisper something it can sniff.
+function clipMeta() {
+  const mime = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
+  const ext = mime.includes('mp4') ? 'm4a' : mime.includes('ogg') ? 'ogg' : 'webm';
+  return { mime: mime.split(';')[0], ext };
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    try { mediaRecorder.requestData(); } catch (e) {}
+    mediaRecorder.stop();
+  }
+  talkBtn.classList.remove('recording');
+}
+
+function concatBytes(a, b) {
+  const c = new Uint8Array(a.length + b.length);
+  c.set(a); c.set(b, a.length);
+  return c;
+}
+
+function showSearching() {
+  searchingEl.textContent = searchesActive > 0
+    ? '\u{1F50E} searching the web… you can still ask something else'
+    : '';
+}
+
+// Read a length-prefixed frame stream: [1B type][4B BE len][payload]
+//   0x01 JSON meta {user, reply, done}   0x02 WAV audio   0x03 JSON event {kind,...}
+function addSegment(ev) {
+  if (ev.id === 0 && segmentsEl.dataset.turn !== String(turnNo)) {
+    segmentsEl.textContent = ''; for (const k in segEls) delete segEls[k];
+    segmentsEl.dataset.turn = String(turnNo);
+  }
+  const el = document.createElement('div');
+  el.className = 'seg ' + ev.lang + (ev.spoken === false ? ' silent' : '');
+  const main = document.createElement('span');
+  if (ev.ruby && ev.ruby.length) {
+    for (const r of ev.ruby) {
+      if (r.r) {
+        const ru = document.createElement('ruby');
+        ru.appendChild(document.createTextNode(r.t));
+        const rt = document.createElement('rt'); rt.textContent = r.r;
+        ru.appendChild(rt); main.appendChild(ru);
+      } else main.appendChild(document.createTextNode(r.t));
+    }
+  } else main.textContent = ev.text;
+  el.appendChild(main);
+  const tr = document.createElement('span'); tr.className = 'tr'; tr.textContent = ev.tr || '';
+  el.appendChild(tr);
+  segmentsEl.appendChild(el);
+  segEls[ev.id] = el;
+}
+
+async function readFrames(res) {
+  turnNo++;
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = new Uint8Array(0);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf = concatBytes(buf, value);
+    while (buf.length >= 5) {
+      const type = buf[0];
+      const len = ((buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4]) >>> 0;
+      if (buf.length < 5 + len) break;
+      const payload = buf.slice(5, 5 + len);
+      buf = buf.slice(5 + len);
+      if (type === 1) {
+        const m = JSON.parse(dec.decode(payload));
+        transcriptEl.textContent =
+          (m.user ? 'You: ' + m.user + '\n' : '') +
+          (m.reply ? 'Assistant: ' + m.reply : '');
+      } else if (type === 2) {
+        enqueueAudio(payload);
+      } else if (type === 3) {
+        const ev = JSON.parse(dec.decode(payload));
+        if (ev.kind === 'segment') {
+          addSegment(ev);
+        } else if (ev.kind === 'segment_tr') {
+          const el = segEls[ev.id];
+          if (el) { const t = el.querySelector('.tr'); t.textContent = ev.tr || ''; }
+        } else if (ev.kind === 'search_started') {
+          searchesActive = Math.max(searchesActive, 1);  // show now; poll header reconciles
+          showSearching();
+        }
+      }
+    }
+  }
+}
+
+async function sendAudio() {
+  busy = true;
+  talkBtn.classList.add('thinking');
+  statusEl.textContent = 'thinking...';
+  stopPlayback();
+  streamDone = false;
+
+  const { mime, ext } = clipMeta();
+  const blob = new Blob(chunks, { type: mime });
+  const formData = new FormData();
+  formData.append('audio', blob, 'clip.' + ext);
+
+  try {
+    const res = await fetch('/api/converse', {
+      method: 'POST',
+      headers: { 'X-Access-Token': ACCESS_TOKEN, 'X-Session-Id': SESSION_ID },
+      body: formData
+    });
+    if (!res.ok) {
+      let msg = 'server error ' + res.status;
+      try { const j = await res.json(); if (j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+    await readFrames(res);
+    streamDone = true;
+    await decodeChain;
+    if (pendingPlays === 0) statusEl.textContent = 'idle';
+  } catch (err) {
+    statusEl.textContent = 'error: ' + err.message;
+  } finally {
+    talkBtn.classList.remove('thinking');
+    busy = false;
+    pollPending();          // a background answer may already be waiting
+  }
+}
+
+// While idle, ask the server if a background web-search answer is ready and speak it.
+async function pollPending() {
+  if (busy) return;
+  try {
+    const res = await fetch('/api/pending', {
+      headers: { 'X-Access-Token': ACCESS_TOKEN, 'X-Session-Id': SESSION_ID }
+    });
+    const sa = res.headers.get('X-Searches-Active');
+    if (sa !== null) { searchesActive = parseInt(sa, 10) || 0; showSearching(); }
+    if (res.status === 204 || !res.ok) return;
+    if (busy) return;                       // user started talking meanwhile
+    stopPlayback();
+    streamDone = false;
+    await readFrames(res);
+    streamDone = true;
+    showSearching();
+    await decodeChain;
+    if (pendingPlays === 0) statusEl.textContent = 'idle';
+  } catch (e) { /* offline / transient */ }
+}
+setInterval(pollPending, 4000);
+
+talkBtn.addEventListener('touchstart', e => { e.preventDefault(); startRecording(); });
+talkBtn.addEventListener('touchend', e => { e.preventDefault(); stopRecording(); });
+talkBtn.addEventListener('mousedown', startRecording);
+talkBtn.addEventListener('mouseup', stopRecording);
+
+resetBtn.addEventListener('click', async () => {
+  stopPlayback();
+  streamDone = true;
+  searchesActive = 0; showSearching();
+  await fetch('/api/reset', {
+    method: 'POST',
+    headers: { 'X-Access-Token': ACCESS_TOKEN, 'X-Session-Id': SESSION_ID }
+  });
+  transcriptEl.textContent = '';
+  segmentsEl.textContent = '';
+  statusEl.textContent = 'conversation reset';
+});
+
+initMic().catch(err => { statusEl.textContent = 'mic permission needed: ' + err.message; });
+</script>
+
+</body>
+</html>

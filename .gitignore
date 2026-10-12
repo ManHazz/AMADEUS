@@ -1,0 +1,48 @@
+# secrets and local config
+.env
+.env.*
+!.env.example
+agent.local.json
+*.local.json
+!*.local.json.example
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# agent runtime and test output
+*.log
+*.gguf
+agent/e2e/audio/
+agent/e2e/report/
+agent/tmp/
+
+# avatar models (supply your own)
+*.vrm
+*.vroid
+
+# Unity
+unity/Library/
+unity/Temp/
+unity/Obj/
+unity/obj/
+unity/Logs/
+unity/UserSettings/
+unity/Builds/
+unity/Build/
+unity/MemoryCaptures/
+*.csproj
+*.sln
+*.suo
+*.user
+.vs/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

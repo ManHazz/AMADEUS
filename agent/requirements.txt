@@ -1,0 +1,26 @@
+fastapi
+uvicorn[standard]
+python-multipart
+faster-whisper
+kokoro>=0.9.4
+misaki[en]
+# Japanese TTS (tutor mode). misaki[ja] pulls 'pyopenjtalk', which has no Windows wheel and
+# fails to build (cmake); on Windows install the prebuilt fork instead:
+#   pip install --only-binary=:all: pyopenjtalk-plus
+pyopenjtalk-plus
+fugashi
+jaconv
+mojimoji
+unidic-lite
+pykakasi
+espeakng-loader
+# spaCy English model misaki needs at runtime (not on PyPI by name):
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+torch
+openai
+httpx            # web_fetch / web_search (also an openai dep)
+soundfile
+numpy
+
+# For faster-whisper on CUDA, additionally install (not needed for CPU):
+#   nvidia-cublas-cu12  nvidia-cudnn-cu12>=9,<10

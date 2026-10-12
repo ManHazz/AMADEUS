@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+*.log
+*.gguf
+/tmp/
+
+# e2e suite
+e2e/audio/
+e2e/report/
+.coverage
+coverage.xml

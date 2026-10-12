@@ -1,0 +1,11 @@
+Library/
+Temp/
+Obj/
+Logs/
+UserSettings/
+Builds/
+*.csproj
+*.sln
+
+# local agent config (contains token)
+agent.local.json

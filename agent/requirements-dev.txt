@@ -1,0 +1,14 @@
+# test-only dependencies. NOT needed to run the app -- see requirements.txt.
+# This is exactly what CI installs. The heavy pieces (faster-whisper, kokoro,
+# torch) are deliberately absent: tests/conftest.py stubs them.
+pytest>=8
+pytest-cov
+fastapi
+uvicorn[standard]
+python-multipart
+openai
+httpx
+soundfile
+numpy
+# pure-Python (no compile, no models); the ruby/kana-folding tests need it
+pykakasi

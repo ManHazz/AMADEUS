@@ -1,0 +1,22 @@
+# CPU-only setup, standalone (does not extend docker-compose.yml, so there is no GPU reservation).
+#   docker compose -f docker-compose.cpu.yml up --build
+# Slower than GPU. Uses a small int8 Whisper model by default; override with STT_MODEL in .env.
+services:
+  agent:
+    build: .
+    image: amadeus-agent:latest
+    env_file: .env
+    environment:
+      PORT: "5000"
+      STT_DEVICE: cpu
+      TTS_DEVICE: cpu
+      STT_COMPUTE_TYPE: int8
+      HF_HOME: /models
+    ports:
+      - "${AGENT_PORT:-5000}:5000"
+    volumes:
+      - models:/models
+    restart: unless-stopped
+
+volumes:
+  models:
