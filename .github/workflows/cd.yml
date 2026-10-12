@@ -17,7 +17,7 @@ jobs:
       - name: Zip agent source
         run: git archive --format=zip --prefix=agent/ -o "amadeus-agent-${GITHUB_REF_NAME}.zip" HEAD:agent
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: amadeus-agent-*.zip
