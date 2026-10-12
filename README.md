@@ -7,7 +7,7 @@ Voice-driven Japanese conversation partner with a 3D anime avatar in Unity.
 ![Unity](https://img.shields.io/badge/Unity-6000.6-black)
 ![Last commit](https://img.shields.io/github/last-commit/ManHazz/AMADEUS)
 
-## Demo
+## Screenshots
 
 Automated captures from the Unity test harness, using the developer's own VRM (not included).
 
