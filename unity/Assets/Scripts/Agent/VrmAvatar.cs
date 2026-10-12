@@ -66,7 +66,7 @@ public class VrmAvatar : MonoBehaviour, IAvatarExpressions
     // max VRM preset weight while speaking (idle allows 0.8)
     const float CapHappy = 0.35f, CapSad = 0.4f, CapAngry = 0.35f, CapSurprised = 0.25f, CapRelaxed = 0.5f;
     const string RawEyeFun = "Fcl_EYE_Fun", RawBrwJoy = "Fcl_BRW_Joy", RawEyeAngry = "Fcl_EYE_Angry", RawBrwAngry = "Fcl_BRW_Angry",
-        RawEyeSorrow = "Fcl_EYE_Sorrow", RawBrwSorrow = "Fcl_BRW_Sorrow", RawEyeSurp = "Fcl_EYE_Surprised", RawBrwSurp = "Fcl_BRW_Surprised";
+        RawEyeSorrow = "Fcl_EYE_Sorrow", RawBrwSorrow = "Fcl_BRW_Sorrow", RawEyeSurp = "Fcl_EYE_Surprised", RawBrwSurp = "Fcl_BRW_Surprised", RawEyeSpread = "Fcl_EYE_Spread";
     SkinnedMeshRenderer _face; readonly System.Collections.Generic.Dictionary<string, int> _rawIdx = new System.Collections.Generic.Dictionary<string, int>();
     void SetRaw(string name, float w01)
     {
@@ -140,17 +140,17 @@ public class VrmAvatar : MonoBehaviour, IAvatarExpressions
         surprised = Mathf.Min(surprised, Mathf.Lerp(0.8f, CapSurprised, sp2));
         relaxed = Mathf.Min(relaxed, Mathf.Lerp(0.8f, CapRelaxed, sp2));
         float e = _emoCur;
-        float eyeFun = 0, brwJoy = 0, eyeAngry = 0, brwAngry = 0, eyeSorrow = 0, brwSorrow = 0, eyeSurp = 0, brwSurp = 0;
+        float eyeFun = 0, brwJoy = 0, eyeAngry = 0, brwAngry = 0, eyeSorrow = 0, brwSorrow = 0, eyeSurp = 0, brwSurp = 0, eyeSpread = 0;
         switch (_shownEmo)
         {
-            case "happy": eyeFun = 0.9f * e; brwJoy = 0.8f * e; break;
+            case "happy": eyeFun = 0f; brwJoy = 0.8f * e; eyeSpread = 1f * e; eyeSurp = 0.7f * e; break; // wide bright eyes: little ^^ squint
             case "embarrassed": eyeFun = 0.4f * e; brwSorrow = 0.3f * e; break;
             case "angry": eyeAngry = 0.9f * e; brwAngry = 1f * e; break;
             case "sad": eyeSorrow = 0.9f * e; brwSorrow = 1f * e; break;
             case "surprised": eyeSurp = 0.8f * e; brwSurp = 1f * e; break;
         }
         SetRaw(RawEyeFun, eyeFun); SetRaw(RawBrwJoy, brwJoy); SetRaw(RawEyeAngry, eyeAngry); SetRaw(RawBrwAngry, brwAngry);
-        SetRaw(RawEyeSorrow, eyeSorrow); SetRaw(RawBrwSorrow, brwSorrow); SetRaw(RawEyeSurp, eyeSurp); SetRaw(RawBrwSurp, brwSurp);
+        SetRaw(RawEyeSorrow, eyeSorrow); SetRaw(RawBrwSorrow, brwSorrow); SetRaw(RawEyeSurp, eyeSurp); SetRaw(RawBrwSurp, brwSurp); SetRaw(RawEyeSpread, eyeSpread);
 
         var ex = _vrm.Runtime.Expression;
         ex.SetWeight(ExpressionKey.Happy, happy);

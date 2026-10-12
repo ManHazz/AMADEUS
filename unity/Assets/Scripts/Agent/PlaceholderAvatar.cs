@@ -22,6 +22,9 @@ public class PlaceholderAvatar : MonoBehaviour, IAvatarExpressions
         go.name = "PlaceholderBody";
         Destroy(go.GetComponent<Collider>());
         go.transform.SetParent(transform, false);
+        // stand on the floor with the eyes at ~1.45 m, where CameraRig.FaceCenter() looks when there is no VRM
+        go.transform.localScale = Vector3.one * 0.85f;
+        go.transform.localPosition = new Vector3(0f, 0.85f, -0.5f); // pushed back (the scene root faces the camera along +z) so the Face-preset camera (~0.7 m away) sees the whole face
         _body = go.GetComponent<Renderer>();
         _body.material = new Material(_body.sharedMaterial);
         _mouth = MakePart(go.transform, "Mouth", new Vector3(0f, 0.45f, 0.48f), new Vector3(0.3f, 0.05f, 0.05f), Color.black);
