@@ -36,7 +36,7 @@ start); later runs about 3.5 min. About 15 Gemini requests (+1 for the server wa
 
 1 greeting; 2 "teach me good morning"; 3 answer the check question; 4 tense correction;
 5 quiz (fixed answers, structure only); 6 shadowing (the learner repeats her first ja line);
-7 mixed English/Japanese request; 8 persona (must be a neutral AI tutor, not a fictional character);
+7 mixed English/Japanese request; 8 persona (must be a neutral AI conversation partner, not a fictional character);
 9 noise and too-short audio; 10 /health, /, /api/reset, /api/pending, auth rejection.
 
 ## Checks
@@ -59,7 +59,7 @@ INCONCLUSIVE (Gemini 429/503 or cut stream after one retry with 15 s backoff). A
 | first_audio_latency | request -> first AUDIO frame | WARN > 6 s |
 | whisper_roundtrip | Whisper(ja) on each returned ja audio vs its segment text | each >= 0.5 else WARN |
 | content_expectation | e.g. lesson contains おはよう, correction contains 見ました | WARN |
-| persona_* | no tsundere markers (Hah, Tch, "it's not like", ふん ...), no claim to be a fictional character, states AI tutor identity | FAIL / FAIL / WARN |
+| persona_* | no tsundere markers (Hah, Tch, "it's not like", ふん ...), no claim to be a fictional character, states AI conversation-partner identity | FAIL / FAIL / WARN |
 
 Timings reported per turn: request -> first META, -> first segment event, -> first AUDIO, -> last frame, plus
 server-side STT time. Note META arrives right after STT, so "first META" is roughly upload + STT.
@@ -71,5 +71,5 @@ server-side STT time. Note META arrives right after STT, so "first META" is roug
 - Gemini free tier is rate limited; the suite sleeps 4 s between turns and retries a 429/503 once, otherwise reports INCONCLUSIVE.
   A retry re-sends the user turn, so that session's history contains it twice.
 - The LLM is not deterministic: WARN/FAIL on `ja_has_following_tr` etc. can vary between runs. Content checks are loose on purpose.
-- Quiz and shadowing check structure, not whether the tutor judged correctly. No pronunciation scoring (the agent only gets text).
+- Quiz and shadowing check structure, not whether the partner judged correctly. No pronunciation scoring (the agent only gets text).
 - A second server needs about 1.5-2 GB free VRAM; otherwise the suite reuses the server on port 5000.

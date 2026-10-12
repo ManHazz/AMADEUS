@@ -1,4 +1,4 @@
-# AMADEUS (Japanese tutor with a 3D avatar)
+# AMADEUS (Japanese conversation partner with a 3D avatar)
 
 [![CI](https://github.com/ManHazz/AMADEUS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ManHazz/AMADEUS/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
@@ -6,17 +6,33 @@
 ![Coverage](https://img.shields.io/badge/coverage-workflow%20artifact-lightgrey)
 ![Last commit](https://img.shields.io/github/last-commit/ManHazz/AMADEUS)
 
-A voice-driven Japanese tutor with a 3D anime avatar. You hold a key and speak; a local FastAPI agent transcribes your speech, asks a language model for a reply, synthesizes the Japanese voice, and streams text and audio back to a Unity client, where the avatar speaks with lip sync, expressions and subtitles (Japanese with furigana, plus an English translation).
+A voice-driven Japanese conversation partner with a 3D anime avatar, for practising speaking. You hold a key and speak; a local FastAPI agent transcribes your speech, asks a language model for a reply, synthesizes the Japanese voice, and streams text and audio back to a Unity client, where the avatar speaks with lip sync, expressions and subtitles (Japanese with furigana, plus an English translation).
 
-The tutor is a friendly, neutral AI Japanese tutor aimed at an English-speaking learner at roughly JLPT N5 to N4. It has no character persona and no personal name; when asked, it says it is an AI tutor.
+She talks with you in Japanese at roughly JLPT N5 to N4 level, aimed at an English-speaking learner. Short English tips appear as silent on-screen text (they are never spoken), and she gently corrects one mistake at a time without breaking the conversation. She has no character persona and no personal name. This is a conversation partner, not a course: see "Limitations / not included" below.
+
+## Demo
+
+These are example screenshots from the developer's own setup. They are automated captures from the Unity verification harness (not hand-picked recordings), and they show the developer's own VRM avatar model, which is not included in this repository. Without your own VRM the client shows a placeholder avatar instead.
+
+| Neutral | Happy | Angry |
+|---|---|---|
+| ![Neutral expression](docs/images/emotion-neutral.png) | ![Happy expression](docs/images/emotion-happy.png) | ![Angry expression](docs/images/emotion-angry.png) |
+| Default state: mouth closed, no strong emotion. | Chosen from friendly cues such as "thank" or "great" in the reply or its translation. | Chosen from irritation cues; shown here while speaking, so only the eyes and brows carry it. |
+
+| Subtitles with furigana and a tip | Full screen: transcript, subtitles, controls |
+|---|---|
+| ![Subtitle stack with furigana, an English tip and translations](docs/images/subtitles-furigana.png) | ![Full client view](docs/images/demo-full-ui.png) |
+| Japanese lines with readings above the kanji, an English translation per line, a silent amber tip on top, and the playing line highlighted. | The "You (heard)" box top left shows the Whisper transcript. The mic name shown is the generic Windows device label. |
+
+How emotions are chosen (see `KeywordEmotionClassifier.cs` and `EmotionDriver.cs`): the client classifies the Japanese text of each segment, the English translation and the reply summary with keyword cues in both languages (happy, sad, angry, surprised, embarrassed) and takes the strongest non-neutral match above a confidence floor. The emotion is held until speech ends plus 2 seconds, then fades to neutral. While she speaks, the strong whole-face expressions are capped so the mouth can follow the voice; the eyes and brows carry the mood. It is keyword matching, not a model of the conversation, so it can be wrong. The screenshots come from the test harness (which sets the expression), not from live conversations.
 
 ## Features
 
 - Push-to-talk voice conversation in English or Japanese.
 - Local speech recognition (faster-whisper) and local speech synthesis (Kokoro, with a Japanese voice for the Japanese lines).
 - Language model through any OpenAI-compatible chat endpoint (developed against Gemini; a local llama.cpp server also works).
-- Tutor protocol: every line of a reply is tagged `[ja]` (spoken Japanese), `[en]` (silent English tip) or `[tr]` (silent English translation). See `agent/PROTOCOL_SEGMENTS.md`.
-- Teaching modes by plain words: free conversation with gentle corrections, "quiz me", "teach me <topic>", and shadowing drills.
+- Segment protocol: every line of a reply is tagged `[ja]` (spoken Japanese), `[en]` (silent English tip) or `[tr]` (silent English translation). See `agent/PROTOCOL_SEGMENTS.md`.
+- Conversation practice with gentle corrections, one at a time. On request by plain words she can also do conversation-practice exercises: "quiz me" (short questions), "teach me <topic>" (a few example sentences with a check question) and shadowing (repeat a line; she compares your transcript to hers).
 - Unity client: VRM 1.0 avatar, lip sync driven by the audio level, keyword-based emotion, idle motion, subtitles with furigana, debug panel (F2).
 - Optional web search in the agent (can be turned off with `ENABLE_WEB_SEARCH=0`).
 
@@ -112,16 +128,20 @@ The `unity-tests` job only runs when the repository variable `UNITY_CI` is `true
 
 Branch protection and required status checks cannot be set from files; configure them in the repository settings after the first successful run.
 
-## Known limitations
+## Limitations / not included
 
-- No pronunciation scoring from audio. The tutor only receives a text transcript of what you said, so shadowing drills check wording, not pronunciation, and speech recognition errors can look like learner mistakes.
+- Not a course: no curriculum, no lesson plan, no spoken English explanations. English appears only as silent on-screen tips and subtitles.
+- No progress memory and no spaced repetition. She does not remember you or your mistakes between sessions.
+- No pronunciation scoring from audio. She only receives the Whisper text transcript of what you said, so shadowing exercises check wording, not pronunciation, and speech recognition errors can look like your mistakes.
+- Corrections and quizzes depend on the language model, which can be wrong; treat them as practice, not as authoritative grading.
 - Free-tier language-model endpoints have rate limits, which can cause slow or failed replies.
 - No avatar is bundled. Without a VRM file the Unity client uses a placeholder avatar (see `unity/Assets/Characters/README.md`), and the committed scene needs to be regenerated for your own model.
 - The avatar's strongest expressions are limited while it is talking so the mouth can follow the voice.
 - Emotion is chosen by keyword cues in the text, not by a model of the conversation.
+- The bundled system prompt file keeps its original name (`tutor_neutral.txt`); its content describes an AI Japanese conversation partner.
 
 ## Credits and license
 
-The `agent/` directory is based on [ManHazz/Voice-Agent](https://github.com/ManHazz/Voice-Agent) and has been modified for Japanese tutoring. The Noto Sans JP font in the Unity project is under the SIL Open Font License. UniVRM is a separate package with its own license.
+The `agent/` directory is based on [ManHazz/Voice-Agent](https://github.com/ManHazz/Voice-Agent) and has been modified for Japanese conversation practice. The Noto Sans JP font in the Unity project is under the SIL Open Font License. UniVRM is a separate package with its own license.
 
 No license has been chosen for this repository yet; add a `LICENSE` file before publishing.

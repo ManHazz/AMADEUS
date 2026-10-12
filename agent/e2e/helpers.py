@@ -305,7 +305,7 @@ CLAIMS_CHARACTER = re.compile(
     r"\bi(?:'m| am)\s+(?:from|in)\s+(?:an?\s+)?(?:anime|game|visual novel)|"
     r"私は\s*(?:アニメ|ゲーム)の(?:キャラクター|キャラ)", re.I)
 AI_IDENTITY = re.compile(
-    r"\bAI\b|artificial|tutor|ＡＩ|エーアイ|人工知能|チューター|先生|家庭教師|にほんごの|日本語の", re.I)
+    r"\bAI\b|artificial|tutor|partner|conversation|会話|相手|ＡＩ|エーアイ|人工知能|チューター|先生|家庭教師|にほんごの|日本語の", re.I)
 
 MAX_SPOKEN_LINES = 4
 FIRST_AUDIO_WARN_S = 6.0
@@ -462,8 +462,8 @@ def check_persona(a: Analysis):
     out.append(chk("persona_not_character", FAIL if m else PASS,
                    f"claims to be a fictional character: {m.group(0)!r}" if m else "does not claim to be a fictional character"))
     m = AI_IDENTITY.search(text)
-    out.append(chk("persona_states_ai_tutor", PASS if m else WARN,
-                   f"identity wording: {m.group(0)!r}" if m else "no AI/tutor wording in the reply"))
+    out.append(chk("persona_states_ai_identity", PASS if m else WARN,
+                   f"identity wording: {m.group(0)!r}" if m else "no AI/partner wording in the reply"))
     return out
 
 

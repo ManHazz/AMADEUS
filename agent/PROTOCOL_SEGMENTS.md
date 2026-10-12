@@ -1,4 +1,4 @@
-# Segment protocol (tutor mode)
+# Segment protocol (conversation mode)
 
 The brain (system prompt `prompts/tutor_neutral.txt`) tags each line of its reply:
 
